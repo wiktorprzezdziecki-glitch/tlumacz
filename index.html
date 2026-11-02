@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pl" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tłumacz</title>
+  <meta name="description" content="Prywatny tłumacz PL ⇄ DE i PL ⇄ EN, który odpowiada też na pytania z tekstu. Z notatkami.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tłumacz">
+  <meta name="theme-color" content="#3f3cbb">
+  <meta name="color-scheme" content="light dark">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Ustaw motyw zanim strona się narysuje (bez mignięcia).
+    try {
+      var s = JSON.parse(localStorage.getItem('tl.settings') || '{}');
+      if (s.theme) document.documentElement.setAttribute('data-theme', s.theme);
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 id="screenTitle">Tłumacz</h1>
+      <div class="topbar-actions">
+        <button id="btnHistory" class="icon-btn on-brand" aria-label="Historia tłumaczeń"><i data-ic="history"></i></button>
+        <button id="btnSettings" class="icon-btn on-brand" aria-label="Ustawienia"><i data-ic="settings"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ===================== EKRAN 1: TŁUMACZ ===================== -->
+    <section id="view-translate" class="view active" aria-label="Tłumacz">
+      <div id="welcome" class="card welcome" hidden>
+        <div class="welcome-title">👋 Witaj w Tłumaczu!</div>
+        <p>Jednorazowo dodaj <b>darmowy</b> klucz Google Gemini (ok. 2 minuty):</p>
+        <ol>
+          <li>Otwórz Google AI Studio i zaloguj się kontem Google.</li>
+          <li>Kliknij <b>„Create API key”</b> i skopiuj klucz.</li>
+          <li>Wklej go poniżej i zapisz.</li>
+        </ol>
+        <a class="btn secondary" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Otwórz Google AI Studio <i data-ic="external"></i></a>
+        <div class="key-row">
+          <input id="welcomeKey" type="text" class="secret" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Wklej klucz (AIza…)">
+          <button class="btn small ghost" data-paste-into="welcomeKey">Wklej</button>
+        </div>
+        <button id="welcomeSave" class="btn primary">Zapisz klucz</button>
+        <div id="welcomeStatus" class="status-line"></div>
+      </div>
+
+      <div class="card dir-card">
+        <div class="dir-row">
+          <span class="dir-label">Z</span>
+          <button id="srcChip" class="lang-chip" aria-label="Język tekstu – zmień">
+            <span class="flag" id="srcFlag">🌐</span>
+            <span class="chip-texts">
+              <span class="chip-name" id="srcName">Wykryj język</span>
+              <span class="chip-sub" id="srcSub">automatycznie</span>
+            </span>
+            <i data-ic="chevronDown"></i>
+          </button>
+        </div>
+        <div class="dir-row">
+          <span class="dir-label">Na</span>
+          <div class="target-wrap">
+            <div class="seg" id="plTargetSeg" role="radiogroup" aria-label="Język docelowy dla tekstu po polsku">
+              <button role="radio" data-val="de"><span class="flag">🇩🇪</span>Niemiecki</button>
+              <button role="radio" data-val="en"><span class="flag">🇬🇧</span>Angielski</button>
+            </div>
+            <div class="lang-fixed" id="targetFixed" hidden>
+              <span class="flag">🇵🇱</span>
+              <span class="chip-texts">
+                <span class="chip-name">Polski</span>
+                <span class="chip-sub">automatycznie</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="dir-hint" id="dirHint">Tekst po niemiecku lub angielsku zawsze tłumaczę na polski.</div>
+      </div>
+
+      <div class="card input-card">
+        <textarea id="input" placeholder="Wklej lub wpisz tekst…" autocapitalize="sentences" spellcheck="true" aria-label="Tekst do przetłumaczenia"></textarea>
+        <div class="input-tools">
+          <button id="btnPaste" class="pill"><i data-ic="paste"></i>Wklej</button>
+          <button id="btnClear" class="pill ghost" hidden><i data-ic="x"></i>Wyczyść</button>
+          <span class="char-count" id="charCount"></span>
+        </div>
+      </div>
+
+      <button id="btnTranslate" class="btn primary big">
+        <span class="btn-label">Przetłumacz</span>
+      </button>
+
+      <div id="result" aria-live="polite"></div>
+    </section>
+
+    <!-- ===================== EKRAN 2: NOTATKI ===================== -->
+    <section id="view-notes" class="view" aria-label="Notatki">
+      <div id="notesList">
+        <div id="draftBanner" class="card draft-banner" hidden>
+          <div><b>Niezapisany szkic</b><span id="draftTitle"></span></div>
+          <div class="draft-actions">
+            <button class="btn small primary" id="draftRestore">Przywróć</button>
+            <button class="btn small ghost" id="draftDiscard">Odrzuć</button>
+          </div>
+        </div>
+
+        <div class="search-row">
+          <label class="search">
+            <i data-ic="search"></i>
+            <input id="noteSearch" type="search" placeholder="Szukaj w notatkach" autocomplete="off" enterkeyhint="search">
+          </label>
+          <button id="btnSort" class="pill" aria-label="Sortowanie"><i data-ic="sort"></i><span id="sortLabel">Najnowsze</span></button>
+        </div>
+        <div class="chips" id="folderChips"></div>
+        <div id="notesContainer" class="notes-grid"></div>
+        <button class="fab" id="btnNewNote" aria-label="Nowa notatka"><i data-ic="plus"></i></button>
+      </div>
+
+      <div id="noteEditor" hidden>
+        <div class="editor-bar">
+          <button class="text-btn back" id="editorBack"><i data-ic="chevronLeft"></i>Biblioteka</button>
+          <span class="editor-status" id="editorStatus"></span>
+          <button class="icon-btn" id="editorFav" aria-label="Ulubiona"><i data-ic="star"></i></button>
+          <button class="btn small primary" id="editorSave"><i data-ic="check"></i>Zapisz</button>
+        </div>
+        <div class="card editor-card">
+          <input id="noteTitle" class="note-title-input" placeholder="Tytuł" autocapitalize="sentences" enterkeyhint="next">
+          <label class="folder-input">
+            <i data-ic="folder"></i>
+            <input id="noteFolder" list="folderList" placeholder="Folder (np. Niemiecki, Szkoła)" autocapitalize="sentences">
+            <datalist id="folderList"></datalist>
+          </label>
+          <textarea id="noteBody" placeholder="Treść notatki…" autocapitalize="sentences"></textarea>
+        </div>
+        <div class="editor-actions">
+          <button class="pill" id="editorTranslate"><i data-ic="languages"></i>Przetłumacz</button>
+          <button class="pill" id="editorCopy"><i data-ic="copy"></i>Kopiuj</button>
+          <button class="pill" id="editorShare"><i data-ic="share"></i>Udostępnij</button>
+          <button class="pill danger" id="editorDelete"><i data-ic="trash"></i>Usuń</button>
+        </div>
+        <div class="editor-meta" id="editorMeta"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Ekrany">
+    <button class="tab active" data-tab="translate"><i data-ic="languages"></i><span>Tłumacz</span></button>
+    <button class="tab" data-tab="notes"><i data-ic="book"></i><span>Notatki</span></button>
+  </nav>
+
+  <!-- ===================== USTAWIENIA ===================== -->
+  <div class="sheet" id="sheet-settings" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h2 id="settingsTitle">Ustawienia</h2>
+        <button class="text-btn" data-close>Gotowe</button>
+      </div>
+      <div class="sheet-body">
+        <div class="group-label">Wygląd</div>
+        <div class="group">
+          <div class="row">
+            <div class="seg seg-3" id="themeSeg" role="radiogroup" aria-label="Motyw">
+              <button role="radio" data-val="light"><i data-ic="sun"></i>Jasny</button>
+              <button role="radio" data-val="dark"><i data-ic="moon"></i>Ciemny</button>
+              <button role="radio" data-val="auto"><i data-ic="auto"></i>Auto</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-label">Tłumaczenie</div>
+        <div class="group">
+          <label class="row switch-row">
+            <span class="row-text"><b>Tłumacz od razu po wklejeniu</b><small>Wklejenie tekstu do pustego pola od razu go tłumaczy.</small></span>
+            <input type="checkbox" class="switch" id="optAutoPaste">
+          </label>
+          <label class="row switch-row">
+            <span class="row-text"><b>Podwójna kontrola jakości</b><small>Drugi model sprawdza i poprawia tłumaczenie. Dokładniej, ale wolniej i zużywa 2× darmowego limitu.</small></span>
+            <input type="checkbox" class="switch" id="optDoubleCheck">
+          </label>
+        </div>
+
+        <div class="group-label">Klucz Google Gemini (wymagany, darmowy)</div>
+        <div class="group">
+          <div class="row col">
+            <div class="key-row">
+              <input id="geminiKey" type="text" class="secret" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AIza…">
+              <button class="btn small ghost" data-toggle-visibility="geminiKey" aria-label="Pokaż/ukryj klucz"><i data-ic="eye"></i></button>
+              <button class="btn small ghost" data-paste-into="geminiKey">Wklej</button>
+            </div>
+            <div class="btn-row">
+              <button class="btn small primary" id="geminiSave">Zapisz i sprawdź</button>
+              <a class="btn small ghost" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Zdobądź klucz <i data-ic="external"></i></a>
+            </div>
+            <div class="status-line" id="geminiStatus"></div>
+          </div>
+          <div class="row col">
+            <span class="row-text"><b>Model</b><small>„Automatycznie” wybiera najlepszy dostępny darmowy model, a gdy skończy się jego dzienny limit – przełącza się na następny.</small></span>
+            <select id="geminiModel"></select>
+          </div>
+        </div>
+
+        <div class="group-label">Zapasowy dostawca – Groq (opcjonalnie, darmowy)</div>
+        <div class="group">
+          <div class="row col">
+            <span class="row-text"><small>Gdy darmowy limit Gemini na dziś się skończy, aplikacja sama użyje Groq. Klucz: console.groq.com → API Keys → Create API Key.</small></span>
+            <div class="key-row">
+              <input id="groqKey" type="text" class="secret" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="gsk_…">
+              <button class="btn small ghost" data-toggle-visibility="groqKey" aria-label="Pokaż/ukryj klucz"><i data-ic="eye"></i></button>
+              <button class="btn small ghost" data-paste-into="groqKey">Wklej</button>
+            </div>
+            <div class="btn-row">
+              <button class="btn small primary" id="groqSave">Zapisz i sprawdź</button>
+              <a class="btn small ghost" href="https://console.groq.com/keys" target="_blank" rel="noopener">Zdobądź klucz <i data-ic="external"></i></a>
+            </div>
+            <div class="status-line" id="groqStatus"></div>
+          </div>
+        </div>
+
+        <div class="group-label">Dzisiejsze użycie</div>
+        <div class="group">
+          <div class="row col"><div id="usageBox" class="usage"></div></div>
+        </div>
+
+        <div class="group-label">Dane</div>
+        <div class="group">
+          <button class="row action-row" id="btnExport"><i data-ic="download"></i><span>Eksportuj notatki (kopia zapasowa)</span></button>
+          <label class="row action-row" for="importFile"><i data-ic="upload"></i><span>Importuj notatki z pliku</span></label>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+          <button class="row action-row" id="btnClearHistory"><i data-ic="history"></i><span>Wyczyść historię tłumaczeń</span></button>
+        </div>
+
+        <div class="about">
+          <p><b>Tłumacz</b> · wersja <span id="appVersion"></span></p>
+          <p>Notatki, historia i klucze są zapisane <b>tylko na tym telefonie</b>. Tekst do tłumaczenia jest wysyłany do Google Gemini (lub Groq). W darmowym planie Google może wykorzystywać te teksty do ulepszania usług – nie wklejaj haseł ani danych wrażliwych.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== HISTORIA ===================== -->
+  <div class="sheet" id="sheet-history" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h2 id="historyTitle">Historia</h2>
+        <button class="text-btn" data-close>Zamknij</button>
+      </div>
+      <div class="sheet-body" id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- ===================== WYBÓR JĘZYKA ŹRÓDŁOWEGO ===================== -->
+  <div class="sheet" id="sheet-lang" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel small" role="dialog" aria-modal="true" aria-labelledby="langTitle">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <h2 id="langTitle">Język tekstu</h2>
+        <button class="text-btn" data-close>Zamknij</button>
+      </div>
+      <div class="sheet-body">
+        <div class="group" id="langOptions">
+          <button class="row option" data-val="auto"><span class="flag">🌐</span><span>Wykryj automatycznie <small>(zalecane)</small></span><i data-ic="check" class="tick"></i></button>
+          <button class="row option" data-val="pl"><span class="flag">🇵🇱</span><span>Polski</span><i data-ic="check" class="tick"></i></button>
+          <button class="row option" data-val="de"><span class="flag">🇩🇪</span><span>Niemiecki</span><i data-ic="check" class="tick"></i></button>
+          <button class="row option" data-val="en"><span class="flag">🇬🇧</span><span>Angielski</span><i data-ic="check" class="tick"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== OKNO DIALOGOWE + TOAST ===================== -->
+  <div class="dialog" id="dialog" hidden>
+    <div class="dialog-box" role="alertdialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h3 id="dialogTitle"></h3>
+      <p id="dialogMsg"></p>
+      <div class="dialog-buttons" id="dialogButtons"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
